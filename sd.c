@@ -3,12 +3,15 @@
 #include <linux/init.h>
 #include <linux/proc_fs.h>
 
+#define LIMIT 30
 
-static ssize_t	read_function(struct file* fp, char* user_buffer, size_t count, loff_t* offset){
+static char driver_buffer[LIMIT];
+
+static ssize_t read_function(struct file* fp, char* user_buffer, size_t count, loff_t* offset){
     printk("Read function called");
 
-    char * msg = "msg from kernel to userspace\n";
-    size_t len = strlen(msg);
+    //char * msg = "msg from kernel to userspace\n";
+    size_t len = strlen(driver_buffer);
 
     int result;
 
@@ -16,25 +19,37 @@ static ssize_t	read_function(struct file* fp, char* user_buffer, size_t count, l
         return 0;
     }
 
-    result = copy_to_user(user_buffer, msg, 29);
+    result = copy_to_user(user_buffer, driver_buffer, len);
     *offset += len;
-    
 
-    
     return len;
 }
 
-static struct proc_dir_entry* my_proc_dir_entry;
-struct proc_ops my_proc_ops = {
-    .proc_read = read_function
-};
+//ssize_t	(*proc_write)(struct file *, const char __user *, size_t, loff_t *);
+static ssize_t write_function(struct file* fp, const char * user_buffer, size_t count, loff_t * data){
+    printk("Write function called");
+    
+    printk("The message from user is %s\n", user_buffer);
 
-//ssize_t	(*proc_read)(struct file *, char __user *, size_t, loff_t *);
-// struct proc_dir_entry *proc_create(const char *name, umode_t mode, struct proc_dir_entry *parent, const struct proc_ops *proc_ops);
+    if ( copy_from_user(driver_buffer, user_buffer, count) == 0){
+        printk("Successfully written from userspace\n");
+        printk("Value written: %s\n", driver_buffer);
+        return count;
+    }
+
+    return 0;
+}
+
+static struct proc_dir_entry* my_proc_dir_entry;
+
+struct proc_ops my_proc_ops = {
+    .proc_read = read_function,
+    .proc_write = write_function
+};
 
 static int __init simple_init(void) {
     printk(KERN_INFO "Starting init of driver\n");
-    my_proc_dir_entry = proc_create("ingv_custom_driver", 0, NULL, &my_proc_ops);
+    my_proc_dir_entry = proc_create("ingvdr", 0666, NULL, &my_proc_ops);
     
     if (my_proc_dir_entry == NULL){
         printk("Error init module, my_proc_dir_entry in NULL");
